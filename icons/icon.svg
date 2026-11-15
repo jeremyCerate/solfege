@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#b5532a"/>
-  <g stroke="#fff8ec" stroke-width="10" stroke-linecap="round" opacity="0.55">
+  <rect width="512" height="512" fill="#1c244b"/>
+  <g stroke="#e3c766" stroke-width="10" stroke-linecap="round" opacity="0.45">
     <line x1="96" x2="416" y1="176" y2="176"/>
     <line x1="96" x2="416" y1="216" y2="216"/>
     <line x1="96" x2="416" y1="256" y2="256"/>
     <line x1="96" x2="416" y1="296" y2="296"/>
     <line x1="96" x2="416" y1="336" y2="336"/>
   </g>
-  <g fill="#fff8ec">
+  <g fill="#e3c766">
     <ellipse cx="190" cy="316" rx="34" ry="25" transform="rotate(-22 190 316)"/>
     <rect x="212" y="150" width="12" height="160"/>
     <ellipse cx="322" cy="256" rx="34" ry="25" transform="rotate(-22 322 256)"/>

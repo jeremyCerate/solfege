@@ -1,5 +1,5 @@
 // Hors-ligne : le réseau d'abord (pour toujours avoir la dernière version), le cache en secours.
-const CACHE = 'solfege-v2';
+const CACHE = 'solfege-v3';
 const ASSETS = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/music.js', 'js/audio.js', 'js/staff.js',
