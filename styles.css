@@ -229,3 +229,18 @@ h1 { font-size: 40px; letter-spacing: 0.05em; }
 .namebtn.ok { background: var(--ok); border-color: var(--ok); color: #fff; }
 .namebtn.bad { background: var(--bad); border-color: var(--bad); color: #fff; }
 .learn .sheet { display: flex; flex-direction: column; }
+
+/* ---------- Lecture de rythme ---------- */
+svg.score .nt.warn { color: var(--accent-text); }
+.tapzone {
+  width: 100%; min-height: 120px; border-radius: 10px; background: var(--ink); color: #fff;
+  font: 700 22px var(--display); letter-spacing: 0.12em; text-transform: uppercase;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.tapzone small { display: block; font: 400 13px var(--sans); letter-spacing: 0; text-transform: none; opacity: 0.75; margin-top: 4px; }
+.tapzone.live { background: var(--accent); color: var(--accent-ink); }
+.tapzone.hit { filter: brightness(0.9); }
+.beats { display: flex; gap: 8px; justify-content: center; margin: 10px 0; }
+.beats span { width: 14px; height: 14px; border-radius: 50%; background: var(--line); }
+.beats span.on { background: var(--accent-text); }
+.dot.warn { background: var(--accent-text); }

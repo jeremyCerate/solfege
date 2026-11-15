@@ -195,6 +195,13 @@ function rhythm(cfg) {
   return Array((cfg.measures - 1) * 4).fill('noire').concat(['ronde']);
 }
 
+// Rythme seul (lecture de rythme) : toutes les notes sur la même hauteur
+export function generateRhythm(cfg, step = 6) {
+  const events = [];
+  for (const c of rhythm(cfg)) for (const [dur, rest] of CELL_EVENTS[c]) events.push({ step: rest ? null : step, dur });
+  return events;
+}
+
 // Renvoie la mélodie : [{ step: degré | null (silence), dur: ticks }]
 export function generate(level) {
   // Départ sur le do grave (première ligne supplémentaire sous la portée),

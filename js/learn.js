@@ -1,6 +1,6 @@
-// Les bases : lecture de notes et reconnaissance d'intervalles.
-import { NAMES, noteName, intervalInfo, mod, midi, BEAT } from './music.js';
-import { ensureAudio, playSequence, playStep, stopAll } from './audio.js';
+// Les bases : lecture de notes, reconnaissance d'intervalles, lecture de rythme.
+import { NAMES, noteName, intervalInfo, mod, midi, BEAT, generateRhythm } from './music.js';
+import { ensureAudio, playSequence, playStep, stopAll, perfTimeOf, tapSound } from './audio.js';
 import { Score } from './staff.js';
 
 let env = null; // { app, store, save, record }
@@ -26,26 +26,37 @@ const bar = (title) => `<header class="bar"><button class="back" data-act="home"
 export function initLearn(e) {
   env = e;
   env.app.addEventListener('click', onClick);
+  env.app.addEventListener('pointerdown', (ev) => {
+    if (ev.target.closest('.tapzone')) { ev.preventDefault(); tap(ev.timeStamp); }
+  });
+  document.addEventListener('keydown', (ev) => {
+    if (st && st.kind === 'rh' && st.phase === 'perform' && !ev.repeat && (ev.code === 'Space' || ev.code === 'Enter')) {
+      ev.preventDefault();
+      tap(ev.timeStamp);
+    }
+  });
 }
 
 export function stopLearn() {
   clearTimeout(timer);
+  if (st && st.playing) st.playing.stop();
   st = null;
   if (score) { score.destroy(); score = null; }
 }
 
 export function learnCards(statLine) {
-  const card = (id, mark, title, desc) => `
+  const card = (id, mark, title, desc, unit = 'série') => `
     <button class="level" data-learn="open" data-id="${id}">
       <span class="level-n">${mark}</span>
       <span class="level-body">
         <span class="level-title">${title}</span>
         <span class="level-desc">${desc}</span>
-        ${statLine(id, 'série')}
+        ${statLine(id, unit)}
       </span>
     </button>`;
   return card('read', 'A', 'Lecture de notes', `Une note s'affiche sur la portée, tu donnes son nom · ${READ_COUNT} notes`)
-    + card('iv', 'B', 'Intervalles', `Deux notes sont jouées, tu reconnais l'intervalle · ${IV_COUNT} questions`);
+    + card('iv', 'B', 'Intervalles', `Deux notes sont jouées, tu reconnais l'intervalle · ${IV_COUNT} questions`)
+    + card('rh', 'C', 'Lecture de rythme', 'Un rythme s\'affiche, tu le frappes sur la pulsation · 4 mesures', 'rythme');
 }
 
 function mountScore(slots) {
@@ -239,6 +250,186 @@ function finishIv() {
   endPad('iv');
 }
 
+// ---------- Lecture de rythme ----------
+const RH_LEVELS = [['a', 'Noires, blanches'], ['b', '+ croches'], ['c', '+ triolets']];
+const RH_FIGS = { a: {}, b: { croches: true, silences: true }, c: { croches: true, triolets: true, silences: true } };
+const RH_TEMPI = [['50', 'Lent'], ['60', 'Modéré'], ['72', 'Allant']];
+const RH_MEASURES = 4;
+
+function openRh() {
+  stopLearn();
+  stopAll();
+  ensureAudio();
+  const p = prefs();
+  p.rhLevel ||= 'a';
+  p.rhTempo ||= '60';
+  st = {
+    kind: 'rh', tempo: Number(p.rhTempo), phase: 'ready', taps: [], playing: null, done: false,
+    events: generateRhythm({ measures: RH_MEASURES, figs: RH_FIGS[p.rhLevel] }),
+  };
+  env.app.innerHTML = `
+    ${bar('Lecture de rythme')}
+    <main class="ex learn">
+      <div class="field"><h3>Figures</h3>${seg('rhLevel', RH_LEVELS, p.rhLevel)}</div>
+      <div class="field"><h3>Tempo</h3>${seg('rhTempo', RH_TEMPI, p.rhTempo)}</div>
+      <div class="sheet"><div class="sheet-label">4/4 · quatre temps pour rien, puis frappe chaque note. Ne frappe pas sur les silences.</div><div id="score"></div></div>
+      <div class="beats" id="beats" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      <p class="feedback" id="feedback" role="status"></p>
+      <div id="result"></div>
+    </main>
+    <footer class="pad" id="pad"></footer>`;
+  if (score) score.destroy();
+  score = new Score(document.getElementById('score'), { mode: 'rhythm', measures: RH_MEASURES, single: true, size: 13 });
+  rhReset();
+  window.scrollTo(0, 0);
+}
+
+function rhReset() {
+  if (st.playing) st.playing.stop();
+  st.playing = null;
+  st.phase = 'ready';
+  st.taps = [];
+  st.states = null;
+  document.getElementById('result').innerHTML = '';
+  setFeedback('Lis le rythme, écoute le modèle si tu veux, puis lance-toi.', '');
+  drawRh();
+}
+
+function setFeedback(txt, cls) {
+  const fb = document.getElementById('feedback');
+  fb.textContent = txt;
+  fb.className = 'feedback ' + cls;
+}
+
+function drawRh() {
+  let k = 0;
+  score.setData({
+    events: st.events.map((e) => ({ ...e, state: e.step != null && st.states ? st.states[k++] : '' })),
+    cursor: false,
+  });
+  const pad = document.getElementById('pad');
+  if (st.phase === 'perform') {
+    pad.innerHTML = '<div class="row"><button class="tapzone live">Frappe ici<small>ou la barre d\'espace</small></button></div><div class="row actions"><button class="secondary" data-learn="rh-stop">Arrêter</button></div>';
+  } else if (st.phase === 'model') {
+    pad.innerHTML = '<div class="row actions"><button class="secondary" data-learn="rh-stop">Arrêter</button></div>';
+  } else if (st.done) {
+    pad.innerHTML = '<div class="row actions"><button class="secondary" data-learn="rh-model">Modèle</button><button class="secondary" data-learn="rh-retry">Réessayer</button><button class="primary" data-learn="open" data-id="rh">Nouveau</button></div>';
+  } else {
+    pad.innerHTML = '<div class="row actions"><button class="secondary" data-learn="rh-model">Écouter le modèle</button><button class="primary" data-learn="rh-go">À toi</button></div>';
+  }
+}
+
+// Pastilles de pulsation, calées sur l'horloge audio
+function rhBeats() {
+  const mine = st;
+  const beatMs = 60000 / st.tempo;
+  const dots = [...document.querySelectorAll('#beats span')];
+  const loop = () => {
+    if (st !== mine || !st.playing) { dots.forEach((d) => d.classList.remove('on')); return; }
+    const n = Math.floor((performance.now() - (st.t0 - 4 * beatMs)) / beatMs);
+    dots.forEach((d, i) => d.classList.toggle('on', n >= 0 && i === n % 4));
+    if (st.phase === 'perform') {
+      if (n < 4) setFeedback(n < 0 ? 'Prêt…' : `Pour rien : ${n + 1}`, '');
+      else if (n === 4) setFeedback('À toi !', '');
+    }
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+
+function rhStart(events, phase, onEnd) {
+  ensureAudio();
+  if (st.playing) st.playing.stop();
+  st.phase = phase;
+  const mine = st;
+  st.playing = playSequence(events, {
+    tempo: st.tempo, countIn: 4, metronome: true,
+    onEnd: () => { if (st === mine) { st.playing = null; onEnd(); } },
+  });
+  st.t0 = perfTimeOf(st.playing.startTime);
+  drawRh();
+  rhBeats();
+}
+
+function rhModel() {
+  setFeedback('Le modèle, après quatre temps pour rien.', '');
+  rhStart(st.events.map((e) => ({ step: e.step == null ? null : 4, dur: e.dur })), 'model', () => {
+    st.phase = 'ready';
+    setFeedback(st.done ? '' : 'À toi quand tu veux.', '');
+    drawRh();
+  });
+}
+
+function rhPerform() {
+  st.taps = [];
+  st.states = null;
+  document.getElementById('result').innerHTML = '';
+  rhStart(st.events.map((e) => ({ step: null, dur: e.dur })), 'perform', rhEvaluate);
+}
+
+function rhStop() {
+  if (st.playing) st.playing.stop();
+  st.playing = null;
+  st.phase = 'ready';
+  setFeedback('', '');
+  drawRh();
+}
+
+function tap(time) {
+  if (!st || st.kind !== 'rh' || st.phase !== 'perform') return;
+  st.taps.push(time);
+  tapSound();
+  const z = document.querySelector('.tapzone');
+  if (z) { z.classList.add('hit'); setTimeout(() => z.classList.remove('hit'), 80); }
+}
+
+function rhEvaluate() {
+  const beatMs = 60000 / st.tempo;
+  const tickMs = beatMs / BEAT;
+  const onsets = [];
+  let t = 0;
+  for (const e of st.events) {
+    if (e.step != null) onsets.push(st.t0 + t * tickMs);
+    t += e.dur;
+  }
+  let minGap = Infinity;
+  for (let i = 1; i < onsets.length; i++) minGap = Math.min(minGap, onsets[i] - onsets[i - 1]);
+  const nearW = Math.min(190, minGap * 0.45); // au-delà : frappe manquée
+  const okW = Math.min(100, nearW * 0.6); // en deçà : juste
+  const taps = st.taps.filter((x) => x > st.t0 - beatMs * 0.3);
+  const pairs = [];
+  onsets.forEach((o, i) => taps.forEach((x, j) => { if (Math.abs(x - o) <= nearW) pairs.push([Math.abs(x - o), i, j]); }));
+  pairs.sort((a, b) => a[0] - b[0]);
+  const offset = Array(onsets.length).fill(null);
+  const used = new Set();
+  for (const [, i, j] of pairs) {
+    if (offset[i] != null || used.has(j)) continue;
+    offset[i] = taps[j] - onsets[i];
+    used.add(j);
+  }
+  st.states = offset.map((d) => (d == null ? 'bad' : Math.abs(d) <= okW ? 'ok' : 'warn'));
+  const ok = st.states.filter((x) => x === 'ok').length;
+  const near = st.states.filter((x) => x === 'warn').length;
+  const miss = st.states.filter((x) => x === 'bad').length;
+  const extra = taps.length - used.size;
+  const hit = offset.filter((d) => d != null);
+  const avg = hit.length ? hit.reduce((a, b) => a + b, 0) / hit.length : 0;
+  const ratio = Math.max(0, (ok + 0.5 * near - 0.5 * extra) / onsets.length);
+  env.record('rh', ratio);
+  st.phase = 'ready';
+  st.done = true;
+  const parts = [`${near} décalée${near > 1 ? 's' : ''}`, `${miss} manquée${miss > 1 ? 's' : ''}`];
+  if (extra) parts.push(`${extra} frappe${extra > 1 ? 's' : ''} en trop`);
+  let tip = '';
+  if (hit.length >= 3 && Math.abs(avg) > 45) tip = ` En moyenne tu frappes ${Math.round(Math.abs(avg))} ms ${avg < 0 ? 'en avance' : 'en retard'}.`;
+  document.getElementById('result').innerHTML = resultCard(ok, onsets.length, `notes frappées juste · ${parts.join(' · ')}.`, tip)
+    + '<p class="legend"><span class="dot ok"></span>juste <span class="dot warn"></span>décalée <span class="dot bad"></span>manquée</p>';
+  setFeedback('', '');
+  drawRh();
+}
+
+const OPEN = { read: openRead, iv: openIv, rh: openRh };
+
 // ---------- Commun ----------
 function resultCard(ok, total, line, extra) {
   const r = ok / total;
@@ -259,15 +450,19 @@ function onClick(ev) {
   const el = ev.target.closest('[data-learn]');
   if (!el || el.disabled) return;
   const d = el.dataset;
-  if (d.learn === 'open') return d.id === 'read' ? openRead() : openIv();
+  if (d.learn === 'open') return OPEN[d.id]();
   if (!st) return;
   if (d.learn === 'set') {
     prefs()[d.key] = d.val;
     env.save();
-    return st.kind === 'read' ? openRead() : openIv();
+    return OPEN[st.kind]();
   }
   if (d.learn === 'name') return answerRead(Number(d.val));
   if (d.learn === 'iv') return answerIv(Number(d.val));
+  if (d.learn === 'rh-model') return rhModel();
+  if (d.learn === 'rh-go') return rhPerform();
+  if (d.learn === 'rh-stop') return rhStop();
+  if (d.learn === 'rh-retry') return rhReset();
   if (d.learn === 'replay') { ensureAudio(); return playIv(); }
   if (d.learn === 'next') {
     st.i++;

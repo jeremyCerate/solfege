@@ -12,7 +12,8 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const r1 = (n) => Math.round(n * 10) / 10;
 
 export class Score {
-  constructor(host, { mode, slots = 0, measures = 0, onPointer = null, size = 11, dots = true }) {
+  constructor(host, { mode, slots = 0, measures = 0, onPointer = null, size = 11, dots = true, single = false }) {
+    this.single = single; // portée à une ligne, pour la lecture de rythme
     this.size = size;
     this.dots = dots;
     this.host = host;
@@ -40,7 +41,9 @@ export class Score {
 
   geom() {
     const s = this.size;
-    const g = { s, sysH: 12 * s, top: 4.3 * s, clefW: 4.4 * s };
+    const g = this.single
+      ? { s, sysH: 9 * s, top: 2.8 * s, clefW: 0.9 * s }
+      : { s, sysH: 12 * s, top: 4.3 * s, clefW: 4.4 * s };
     if (this.mode === 'pitch') {
       const avail = this.width - g.clefW - 0.8 * s;
       const maxPer = Math.max(3, Math.floor(avail / (3.4 * s)));
@@ -139,7 +142,7 @@ export class Score {
       }
       for (const c of groups) {
         const avg = c.items.reduce((a, p) => a + p.step, 0) / c.items.length;
-        c.down = avg >= 6;
+        c.down = avg >= 6 && !this.single;
         const ys = c.items.map((p) => this.y(g, p.sys, p.step));
         c.beamY = c.down ? Math.max(...ys) + 3.5 * s : Math.min(...ys) - 3.5 * s;
       }
@@ -150,14 +153,16 @@ export class Score {
     for (let sys = 0; sys < g.systems; sys++) {
       const top = sys * g.sysH + g.top;
       h += '<g class="lines">';
-      for (let k = 0; k < 5; k++) h += `<line x1="0.5" x2="${W - 0.5}" y1="${r1(top + k * s)}" y2="${r1(top + k * s)}"/>`;
+      for (let k = 0; k < 5; k++) if (!this.single || k === 2) h += `<line x1="0.5" x2="${W - 0.5}" y1="${r1(top + k * s)}" y2="${r1(top + k * s)}"/>`;
       h += '</g><g class="ink">';
-      h += glyph(0.6 * s, this.y(g, sys, 4), G.clef);
+      if (!this.single) h += glyph(0.6 * s, this.y(g, sys, 4), G.clef);
       if (!pitch && sys === 0) {
         h += glyph(g.clefW - 0.3 * s, this.y(g, sys, 8), G.four) + glyph(g.clefW - 0.3 * s, this.y(g, sys, 4), G.four);
       }
       h += '</g><g class="bars">';
       const last = sys === g.systems - 1;
+      const by = this.single ? top + s : top;
+      const bh = this.single ? 2 * s : 4 * s;
       if (!pitch) {
         const n = Math.min(g.per, this.measures - sys * g.per);
         for (let m = 1; m <= n; m++) {
@@ -165,9 +170,9 @@ export class Score {
           const x = b.x + b.w;
           const final = last && m === n;
           if (final) {
-            h += `<line x1="${r1(x - 0.75 * s)}" x2="${r1(x - 0.75 * s)}" y1="${top}" y2="${top + 4 * s}"/>`;
-            h += `<rect x="${r1(x - 0.4 * s)}" y="${top}" width="${r1(0.4 * s + 0.3 * s)}" height="${4 * s}"/>`;
-          } else h += `<line x1="${r1(x)}" x2="${r1(x)}" y1="${top}" y2="${top + 4 * s}"/>`;
+            h += `<line x1="${r1(x - 0.75 * s)}" x2="${r1(x - 0.75 * s)}" y1="${by}" y2="${by + bh}"/>`;
+            h += `<rect x="${r1(x - 0.4 * s)}" y="${by}" width="${r1(0.4 * s + 0.3 * s)}" height="${bh}"/>`;
+          } else h += `<line x1="${r1(x)}" x2="${r1(x)}" y1="${by}" y2="${by + bh}"/>`;
         }
       } else if (last) {
         h += `<line x1="${W - 0.8}" x2="${W - 0.8}" y1="${top}" y2="${top + 4 * s}"/>`;
@@ -202,7 +207,7 @@ export class Score {
       if (stems && p.dur < 48) {
         const grp = p.group;
         const beamed = grp && grp.items.length > 1;
-        const down = grp ? grp.down : p.step >= 6;
+        const down = grp ? grp.down : p.step >= 6 && !this.single;
         const sx = down ? xl + 0.07 * s : xl + hw - 0.07 * s;
         const y1 = down ? yN + 0.17 * s : yN - 0.17 * s;
         const y2 = beamed ? grp.beamY : down ? yN + 3.5 * s : yN - 3.5 * s;

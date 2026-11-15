@@ -120,6 +120,31 @@ export function playStep(step, dur = 0.7) {
   tone(master, midi(step), ctx.currentTime + 0.02, dur);
 }
 
+// Instant (horloge performance.now, en ms) où un temps audio donné sort réellement des haut-parleurs
+export function perfTimeOf(audioTime) {
+  const ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
+  if (ts && ts.performanceTime > 0) return ts.performanceTime + (audioTime - ts.contextTime) * 1000;
+  const latency = (ctx.outputLatency || 0) + (ctx.baseLatency || 0);
+  return performance.now() + (audioTime - ctx.currentTime + latency) * 1000;
+}
+
+// Petit son de frappe, immédiat
+export function tapSound() {
+  ensureAudio();
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(330, t);
+  o.frequency.exponentialRampToValueAtTime(160, t + 0.08);
+  g.gain.setValueAtTime(0.5, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  o.connect(g);
+  g.connect(master);
+  o.start(t);
+  o.stop(t + 0.14);
+}
+
 export function stopAll() {
   for (const p of [...live]) p.stop();
 }
@@ -149,6 +174,8 @@ export function playSequence(events, { tempo = 60, countIn = 0, metronome = fals
   }
   let done = false;
   const handle = {
+    startTime: start, // temps audio du premier temps de la mélodie
+    beat,
     stop() {
       if (done) return;
       done = true;
