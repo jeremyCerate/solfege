@@ -52,6 +52,9 @@ export function initLearn(e) {
   env.app.addEventListener('pointerdown', (ev) => {
     if (ev.target.closest('.tapzone')) { ev.preventDefault(); tap(ev.timeStamp); }
   });
+  window.addEventListener('audio-interrupted', () => {
+    if (st && st.kind === 'rh' && st.playing) { st.playing = null; rhStop(); }
+  });
   document.addEventListener('keydown', (ev) => {
     if (st && st.kind === 'rh' && st.phase === 'perform' && !ev.repeat && (ev.code === 'Space' || ev.code === 'Enter')) {
       ev.preventDefault();

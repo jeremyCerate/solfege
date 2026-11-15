@@ -546,6 +546,16 @@ app.addEventListener('input', (ev) => {
   }
 });
 
+// Le son a été coupé (page quittée, écran verrouillé) : remettre les boutons d'écoute à zéro
+window.addEventListener('audio-interrupted', () => {
+  if (ex && ex.playing) {
+    // une écoute coupée en route n'est pas décomptée
+    if (ex.phase === 'input' && ex.which === 'orig') ex.listensLeft++;
+    ex.playing = null;
+    updateListen();
+  }
+});
+
 initLearn({ app, store, save, record });
 renderHome();
 

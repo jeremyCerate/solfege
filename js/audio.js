@@ -12,7 +12,7 @@ const live = new Set();
 const SAMPLES = { 57: 'A3', 60: 'C4', 63: 'Ds4', 66: 'Fs4', 69: 'A4', 72: 'C5', 75: 'Ds5', 78: 'Fs5' };
 const raw = {}; // fichiers téléchargés, pas encore décodés
 const buffers = {}; // sons prêts à jouer
-let decoding = false;
+const pending = new Set(); // décodages en cours
 const samplesReady = () => Object.keys(buffers).length === Object.keys(SAMPLES).length;
 
 // Téléchargement dès l'ouverture de l'app (le décodage attend le premier geste de l'utilisateur).
@@ -23,21 +23,41 @@ const fetched = Promise.all(Object.entries(SAMPLES).map(([m, name]) =>
     .catch(() => {})));
 
 function decodeSamples() {
-  if (decoding) return;
-  decoding = true;
+  const mine = ctx;
   fetched.then(() => {
+    if (ctx !== mine) return;
     for (const [m, ab] of Object.entries(raw)) {
-      ctx.decodeAudioData(ab, (buf) => {
+      if (buffers[m] || pending.has(m)) continue;
+      pending.add(m);
+      // copie : le décodage vide le tampon d'origine, et il peut falloir recommencer
+      mine.decodeAudioData(ab.slice(0), (buf) => {
+        pending.delete(m);
         // niveau de crête, pour que toutes les notes sonnent à la même force
         const d = buf.getChannelData(0);
         let peak = 0.05;
         for (let i = 0; i < d.length && i < buf.sampleRate * 2; i++) peak = Math.max(peak, Math.abs(d[i]));
         buf.level = 0.7 / peak;
         buffers[m] = buf;
-      }, () => {});
+      }, () => { pending.delete(m); });
     }
   });
 }
+
+// Sur iPhone, quitter la page ou verrouiller l'écran coupe le moteur audio, et il ne repart pas
+// toujours. On le ferme donc en partant ; un moteur neuf est créé au premier geste du retour.
+function shutdown() {
+  if (!ctx) return;
+  stopAll();
+  const old = ctx;
+  ctx = null;
+  master = null;
+  wave = null;
+  pending.clear();
+  try { old.close(); } catch { /* déjà fermé */ }
+  window.dispatchEvent(new Event('audio-interrupted'));
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) shutdown(); });
+window.addEventListener('pagehide', shutdown);
 
 function sampleTone(dest, m, t, dur, vel) {
   let base = 60;
@@ -55,6 +75,8 @@ function sampleTone(dest, m, t, dur, vel) {
 }
 
 export function ensureAudio() {
+  // coupure par le système (appel, Siri…) : même remède, on repart d'un moteur neuf
+  if (ctx && (ctx.state === 'interrupted' || ctx.state === 'closed')) shutdown();
   if (!ctx) {
     const AC = window.AudioContext || window.webkitAudioContext;
     ctx = new AC({ latencyHint: 'interactive' });
