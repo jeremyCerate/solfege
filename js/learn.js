@@ -12,16 +12,39 @@ const BACK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 
 const PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.500z"/></svg>';
 
 const READ_COUNT = 20;
-const READ_RANGES = [['0,4', 'do → sol'], ['0,7', 'do → do aigu'], ['-2,10', 'la grave → fa aigu']];
 const IV_COUNT = 15;
 const IV_NAMES = ['', 'Seconde', 'Tierce', 'Quarte', 'Quinte', 'Sixte', 'Septième', 'Octave'];
-const IV_SETS = [['4', 'Seconde → quinte'], ['7', "Jusqu'à l'octave"]];
-const IV_FROM = [['do', 'Depuis do'], ['all', 'Depuis toute note']];
+
+const READ_LEVELS = [
+  { id: 'read1', title: 'De do à sol', desc: 'Les cinq premières notes', range: [0, 4] },
+  { id: 'read2', title: 'De do à do aigu', desc: 'Toute la gamme', range: [0, 7] },
+  { id: 'read3', title: "Jusqu'au fa aigu", desc: 'La gamme et le haut de la portée : ré, mi, fa aigus', range: [0, 10] },
+  { id: 'read4', title: 'Du la grave au fa aigu', desc: 'Toute la portée, avec les notes sous le do', range: [-2, 10] },
+];
+const IV_LEVELS = [
+  { id: 'iv1', title: 'Depuis do, de la seconde à la quinte', desc: 'do-ré, do-mi, do-fa, do-sol', from: 'do', max: 4 },
+  { id: 'iv2', title: "Depuis do, jusqu'à l'octave", desc: "Avec la sixte, la septième et l'octave", from: 'do', max: 7 },
+  { id: 'iv3', title: 'Depuis toute note, de la seconde à la quinte', desc: 'Montants et descendants', from: 'all', max: 4 },
+  { id: 'iv4', title: "Depuis toute note, jusqu'à l'octave", desc: 'Tous les intervalles, montants et descendants', from: 'all', max: 7 },
+];
+const RH_LEVELS = [
+  { id: 'rh1', title: 'Noires et blanches', desc: 'La pulsation et les valeurs longues', figs: {} },
+  { id: 'rh2', title: 'Croches et silences', desc: 'Deux notes par temps, soupirs et demi-pauses', figs: { croches: true, silences: true } },
+  { id: 'rh3', title: 'Triolets', desc: 'Trois notes par temps, avec croches et silences', figs: { croches: true, triolets: true, silences: true } },
+];
+
+export const LEARN_CATS = [
+  { id: 'read', title: 'Lecture de notes', desc: 'Nommer les notes sur la portée', unit: 'série', intro: `Une note s'affiche, tu donnes son nom. Série de ${READ_COUNT} notes.`, levels: READ_LEVELS },
+  { id: 'iv', title: 'Intervalles', desc: "Reconnaître deux notes à l'oreille", unit: 'série', intro: `Deux notes sont jouées, tu reconnais l'intervalle. Série de ${IV_COUNT} questions.`, levels: IV_LEVELS },
+  { id: 'rh', title: 'Lecture de rythme', desc: 'Frapper un rythme sur la pulsation', unit: 'rythme', intro: "Un rythme de 4 mesures s'affiche, tu le frappes sur la pulsation.", levels: RH_LEVELS },
+];
+const catOf = (levelId) => LEARN_CATS.find((c) => c.levels.some((l) => l.id === levelId));
+const levelOf = (levelId) => catOf(levelId).levels.find((l) => l.id === levelId);
 
 const prefs = () => (env.store.learn ||= {});
 const rnd = (n) => Math.floor(Math.random() * n);
 const seg = (name, opts, val) => `<div class="seg small" role="group">${opts.map(([v, lab]) => `<button data-learn="set" data-key="${name}" data-val="${v}" class="${v === val ? 'on' : ''}">${lab}</button>`).join('')}</div>`;
-const bar = (title) => `<header class="bar"><button class="back" data-act="home">${BACK}<span>Accueil</span></button><div class="bar-title">${title}</div></header>`;
+const bar = (title, cat) => `<header class="bar"><button class="back" data-act="${cat ? 'cat' : 'home'}" data-id="${cat || ''}">${BACK}<span>${cat ? 'Niveaux' : 'Accueil'}</span></button><div class="bar-title">${title}</div></header>`;
 
 export function initLearn(e) {
   env = e;
@@ -44,19 +67,25 @@ export function stopLearn() {
   if (score) { score.destroy(); score = null; }
 }
 
-export function learnCards(statLine) {
-  const card = (id, mark, title, desc, unit = 'série') => `
-    <button class="level" data-learn="open" data-id="${id}">
-      <span class="level-n">${mark}</span>
-      <span class="level-body">
-        <span class="level-title">${title}</span>
-        <span class="level-desc">${desc}</span>
-        ${statLine(id, unit)}
-      </span>
-    </button>`;
-  return card('read', 'A', 'Lecture de notes', `Une note s'affiche sur la portée, tu donnes son nom · ${READ_COUNT} notes`)
-    + card('iv', 'B', 'Intervalles', `Deux notes sont jouées, tu reconnais l'intervalle · ${IV_COUNT} questions`)
-    + card('rh', 'C', 'Lecture de rythme', 'Un rythme s\'affiche, tu le frappes sur la pulsation · 4 mesures', 'rythme');
+export function renderLearnCat(id, statLine) {
+  stopLearn();
+  stopAll();
+  const c = LEARN_CATS.find((x) => x.id === id);
+  env.app.innerHTML = `
+    ${bar(c.title)}
+    <main class="home cat">
+      <p class="lede">${c.intro} Un niveau est validé à partir de 80 %.</p>
+      <div class="levels">${c.levels.map((l, i) => `
+        <button class="level" data-learn="open" data-id="${l.id}">
+          <span class="level-n">${i + 1}</span>
+          <span class="level-body">
+            <span class="level-title">${l.title}</span>
+            <span class="level-desc">${l.desc}</span>
+            ${statLine(l.id, c.unit)}
+          </span>
+        </button>`).join('')}</div>
+    </main>`;
+  window.scrollTo(0, 0);
 }
 
 function mountScore(slots) {
@@ -65,18 +94,15 @@ function mountScore(slots) {
 }
 
 // ---------- Lecture de notes ----------
-function openRead() {
+function openRead(level) {
   stopLearn();
   stopAll();
   ensureAudio();
-  const p = prefs();
-  p.readRange ||= '0,4';
-  const [lo, hi] = p.readRange.split(',').map(Number);
-  st = { kind: 'read', lo, hi, i: 0, ok: 0, cur: null, times: [], miss: {}, locked: false, picked: null };
+  const [lo, hi] = level.range;
+  st = { kind: 'read', level, lo, hi, i: 0, ok: 0, cur: null, times: [], miss: {}, locked: false, picked: null };
   env.app.innerHTML = `
-    ${bar('Lecture de notes')}
+    ${bar(level.title, 'read')}
     <main class="ex learn">
-      <div class="field"><h3>Notes à lire</h3>${seg('readRange', READ_RANGES, p.readRange)}</div>
       <p class="progress" id="progress"></p>
       <div class="sheet"><div id="score"></div></div>
       <p class="feedback" id="feedback" role="status"></p>
@@ -134,7 +160,7 @@ function answerRead(k) {
 
 function finishRead() {
   const ratio = st.ok / READ_COUNT;
-  env.record('read', ratio);
+  env.record(st.level.id, ratio);
   const avg = st.times.reduce((a, b) => a + b, 0) / st.times.length;
   const missed = Object.entries(st.miss).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${NAMES[k]} (${n})`);
   document.getElementById('feedback').textContent = '';
@@ -142,23 +168,18 @@ function finishRead() {
   document.getElementById('result').innerHTML = resultCard(st.ok, READ_COUNT,
     `${avg.toFixed(1).replace('.', ',')} s par note en moyenne.`,
     missed.length ? `À revoir : ${missed.join(', ')}.` : '');
-  endPad('read');
+  endPad(ratio);
 }
 
 // ---------- Intervalles ----------
-function openIv() {
+function openIv(level) {
   stopLearn();
   stopAll();
   ensureAudio();
-  const p = prefs();
-  p.ivSet ||= '4';
-  p.ivFrom ||= 'do';
-  st = { kind: 'iv', max: Number(p.ivSet), from: p.ivFrom, i: 0, ok: 0, a: 0, b: 0, answered: null, miss: {} };
+  st = { kind: 'iv', level, max: level.max, from: level.from, i: 0, ok: 0, a: 0, b: 0, answered: null, miss: {} };
   env.app.innerHTML = `
-    ${bar('Intervalles')}
+    ${bar(level.title, 'iv')}
     <main class="ex learn">
-      <div class="field"><h3>Note de départ</h3>${seg('ivFrom', IV_FROM, p.ivFrom)}</div>
-      <div class="field"><h3>Intervalles</h3>${seg('ivSet', IV_SETS, p.ivSet)}</div>
       <p class="progress" id="progress"></p>
       <div class="listen"><button class="play" data-learn="replay">${PLAY}<span><strong>Écouter</strong><small>autant de fois que tu veux</small></span></button></div>
       <div class="sheet"><div class="sheet-label" id="sheet-label"></div><div id="score"></div></div>
@@ -241,36 +262,32 @@ function answerIv(k) {
 }
 
 function finishIv() {
-  env.record('iv', st.ok / IV_COUNT);
+  env.record(st.level.id, st.ok / IV_COUNT);
   const missed = Object.entries(st.miss).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${IV_NAMES[k].toLowerCase()} (${n})`);
   document.getElementById('feedback').textContent = '';
   document.getElementById('progress').textContent = 'Série terminée';
   document.getElementById('result').innerHTML = resultCard(st.ok, IV_COUNT,
     'intervalles reconnus.', missed.length ? `À revoir : ${missed.join(', ')}.` : '');
-  endPad('iv');
+  endPad(st.ok / IV_COUNT);
 }
 
 // ---------- Lecture de rythme ----------
-const RH_LEVELS = [['a', 'Noires, blanches'], ['b', '+ croches'], ['c', '+ triolets']];
-const RH_FIGS = { a: {}, b: { croches: true, silences: true }, c: { croches: true, triolets: true, silences: true } };
 const RH_TEMPI = [['50', 'Lent'], ['60', 'Modéré'], ['72', 'Allant']];
 const RH_MEASURES = 4;
 
-function openRh() {
+function openRh(level) {
   stopLearn();
   stopAll();
   ensureAudio();
   const p = prefs();
-  p.rhLevel ||= 'a';
   p.rhTempo ||= '60';
   st = {
-    kind: 'rh', tempo: Number(p.rhTempo), phase: 'ready', taps: [], playing: null, done: false,
-    events: generateRhythm({ measures: RH_MEASURES, figs: RH_FIGS[p.rhLevel] }),
+    kind: 'rh', level, tempo: Number(p.rhTempo), phase: 'ready', taps: [], playing: null, done: false,
+    events: generateRhythm({ measures: RH_MEASURES, figs: level.figs }),
   };
   env.app.innerHTML = `
-    ${bar('Lecture de rythme')}
+    ${bar(level.title, 'rh')}
     <main class="ex learn">
-      <div class="field"><h3>Figures</h3>${seg('rhLevel', RH_LEVELS, p.rhLevel)}</div>
       <div class="field"><h3>Tempo</h3>${seg('rhTempo', RH_TEMPI, p.rhTempo)}</div>
       <div class="sheet"><div class="sheet-label">4/4 · quatre temps pour rien, puis frappe chaque note. Ne frappe pas sur les silences.</div><div id="score"></div></div>
       <div class="beats" id="beats" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
@@ -313,7 +330,7 @@ function drawRh() {
   } else if (st.phase === 'model') {
     pad.innerHTML = '<div class="row actions"><button class="secondary" data-learn="rh-stop">Arrêter</button></div>';
   } else if (st.done) {
-    pad.innerHTML = '<div class="row actions"><button class="secondary" data-learn="rh-model">Modèle</button><button class="secondary" data-learn="rh-retry">Réessayer</button><button class="primary" data-learn="open" data-id="rh">Nouveau</button></div>';
+    pad.innerHTML = '<div class="row actions"><button class="secondary" data-learn="rh-model">Modèle</button><button class="secondary" data-learn="rh-retry">Réessayer</button><button class="primary" data-learn="open" data-id="${st.level.id}">Nouveau</button></div>';
   } else {
     pad.innerHTML = '<div class="row actions"><button class="secondary" data-learn="rh-model">Écouter le modèle</button><button class="primary" data-learn="rh-go">À toi</button></div>';
   }
@@ -415,7 +432,7 @@ function rhEvaluate() {
   const hit = offset.filter((d) => d != null);
   const avg = hit.length ? hit.reduce((a, b) => a + b, 0) / hit.length : 0;
   const ratio = Math.max(0, (ok + 0.5 * near - 0.5 * extra) / onsets.length);
-  env.record('rh', ratio);
+  env.record(st.level.id, ratio);
   st.phase = 'ready';
   st.done = true;
   const parts = [`${near} décalée${near > 1 ? 's' : ''}`, `${miss} manquée${miss > 1 ? 's' : ''}`];
@@ -440,9 +457,16 @@ function resultCard(ok, total, line, extra) {
     </div>`;
 }
 
-function endPad(id) {
+function endPad(ratio) {
   st.finished = true;
-  document.getElementById('pad').innerHTML = `<div class="row actions"><button class="secondary" data-act="home">Accueil</button><button class="primary" data-learn="open" data-id="${id}">Recommencer</button></div>`;
+  const cat = catOf(st.level.id);
+  const next = cat.levels[cat.levels.indexOf(st.level) + 1];
+  const goNext = ratio >= 0.8 && next;
+  document.getElementById('pad').innerHTML = `<div class="row actions">
+      <button class="secondary" data-act="cat" data-id="${cat.id}">Niveaux</button>
+      <button class="${goNext ? 'secondary' : 'primary'}" data-learn="open" data-id="${st.level.id}">Recommencer</button>
+      ${goNext ? `<button class="primary" data-learn="open" data-id="${next.id}">Suivant</button>` : ''}
+    </div>`;
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 }
 
@@ -450,12 +474,12 @@ function onClick(ev) {
   const el = ev.target.closest('[data-learn]');
   if (!el || el.disabled) return;
   const d = el.dataset;
-  if (d.learn === 'open') return OPEN[d.id]();
+  if (d.learn === 'open') return OPEN[catOf(d.id).id](levelOf(d.id));
   if (!st) return;
   if (d.learn === 'set') {
     prefs()[d.key] = d.val;
     env.save();
-    return OPEN[st.kind]();
+    return OPEN[st.kind](st.level);
   }
   if (d.learn === 'name') return answerRead(Number(d.val));
   if (d.learn === 'iv') return answerIv(Number(d.val));

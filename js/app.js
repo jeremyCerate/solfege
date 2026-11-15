@@ -1,7 +1,7 @@
 import { LEVELS, DEFAULT_CUSTOM, describeLevel, generate, noteLabel, noteName, intervalInfo, MEASURE, BEAT } from './music.js';
 import { ensureAudio, playSequence, playStep, stopAll } from './audio.js';
 import { Score } from './staff.js';
-import { initLearn, stopLearn, learnCards } from './learn.js';
+import { initLearn, stopLearn, LEARN_CATS, renderLearnCat } from './learn.js';
 
 const app = document.getElementById('app');
 const KEY = 'solfege.v1';
@@ -49,67 +49,109 @@ function toast(msg) {
 }
 
 // ---------- Accueil ----------
+const DONE = 0.8; // un niveau est validé à partir de 80 %
+const isDone = (id) => (store.stats[id]?.best || 0) >= DONE;
+let cat = null; // catégorie ouverte
+
 function statLine(id, unit = 'dictée') {
   const st = store.stats[id];
   if (!st) return '<span class="stat none">Pas encore essayé</span>';
-  return `<span class="stat">Meilleur ${Math.round(st.best * 100)} % · ${st.n} ${unit}${st.n > 1 ? 's' : ''}</span>`;
+  return `<span class="stat ${isDone(id) ? '' : 'todo'}">${isDone(id) ? 'Validé · ' : ''}Meilleur ${Math.round(st.best * 100)} % · ${st.n} ${unit}${st.n > 1 ? 's' : ''}</span>`;
 }
+
+const DICT_CATS = [
+  { id: 'pitch', title: 'Hauteurs seules', desc: 'Replacer les notes entendues', intro: 'Toutes les notes ont la même durée : tu ne notes que les hauteurs.' },
+  { id: 'rhythm', title: 'Hauteurs et rythme', desc: 'Noter les notes et leurs durées', intro: 'Comme la dictée du cours : hauteurs et durées, en 4/4.' },
+];
+const levelsOf = (id) => LEVELS.filter((l) => l.mode === id);
 
 function renderHome() {
   stopAll();
   stopLearn();
   ex = null;
-  const card = (l, n) => `
-    <button class="level" data-act="start" data-id="${l.id}">
-      <span class="level-n">${n}</span>
-      <span class="level-body">
-        <span class="level-title">${esc(l.title)}</span>
-        <span class="level-desc">${describeLevel(l).map(esc).join(' · ')}</span>
-        ${statLine(l.id)}
-      </span>
+  cat = null;
+  const tile = (c, ids) => {
+    const done = ids.filter(isDone).length;
+    return `
+    <button class="tile" data-act="cat" data-id="${c.id}">
+      <span class="tile-title">${esc(c.title)}</span>
+      <span class="tile-desc">${esc(c.desc)}</span>
+      <span class="meter" aria-hidden="true"><i style="width:${Math.round((done / ids.length) * 100)}%"></i></span>
+      <span class="tile-count">${done} / ${ids.length} niveaux validés</span>
     </button>`;
-  const pitch = LEVELS.filter((l) => l.mode === 'pitch');
-  const rhythm = LEVELS.filter((l) => l.mode === 'rhythm');
+  };
+  const cn = store.stats.custom ? store.stats.custom.n : 0;
   app.innerHTML = `
     <main class="home">
       <header class="hero">
         <p class="eyebrow">Solfège</p>
         <h1>Lire, entendre, écrire</h1>
-        <p class="lede">Commence par les bases, puis passe à la dictée : écoute la mélodie au piano et replace les notes sur la portée. Tout est en do majeur.</p>
+        <p class="lede">Commence par les bases, puis passe à la dictée. Tout est en do majeur.</p>
       </header>
       <section>
         <h2>Les bases</h2>
-        <div class="levels">${learnCards(statLine)}</div>
+        <div class="tiles">${LEARN_CATS.map((c) => tile(c, c.levels.map((l) => l.id))).join('')}</div>
       </section>
       <section>
-        <h2>Dictée · hauteurs seules</h2>
-        <div class="levels">${pitch.map((l, i) => card(l, i + 1)).join('')}</div>
-      </section>
-      <section>
-        <h2>Dictée · hauteurs et rythme</h2>
-        <div class="levels">${rhythm.map((l, i) => card(l, pitch.length + i + 1)).join('')}</div>
-      </section>
-      <section>
-        <h2>Dictée · à ta mesure</h2>
-        <div class="levels">
-          <button class="level" data-act="custom">
-            <span class="level-n">✎</span>
-            <span class="level-body">
-              <span class="level-title">Dictée personnalisée</span>
-              <span class="level-desc">${describeLevel(store.custom).map(esc).join(' · ')}</span>
-              ${statLine('custom')}
-            </span>
+        <h2>La dictée</h2>
+        <div class="tiles">${DICT_CATS.map((c) => tile(c, levelsOf(c.id).map((l) => l.id))).join('')}
+          <button class="tile" data-act="custom">
+            <span class="tile-title">Personnalisée</span>
+            <span class="tile-desc">Choisir les notes, les sauts, le rythme, le tempo</span>
+            <span class="tile-count">${cn ? `${cn} dictée${cn > 1 ? 's' : ''} faite${cn > 1 ? 's' : ''}` : 'À ta mesure'}</span>
           </button>
         </div>
       </section>
       <section>
-        <h2>Préférences</h2>
-        <div class="prefs">
-          <label class="switch"><input type="checkbox" data-pref="metro" ${store.prefs.metro ? 'checked' : ''}><span>Garder la pulsation pendant l'écoute <small>dictées avec rythme</small></span></label>
-          <label class="switch"><input type="checkbox" data-pref="echo" ${store.prefs.echo ? 'checked' : ''}><span>Entendre les notes que je pose <small>plus facile : à désactiver pour s'entraîner sérieusement</small></span></label>
-        </div>
+        <button class="linkrow" data-act="prefs">Préférences et progression</button>
       </section>
       <p class="credits">Piano : Salamander Grand Piano, Alexander Holm (CC-BY 3.0). Notation : police Bravura (SIL OFL).</p>
+    </main>`;
+  window.scrollTo(0, 0);
+}
+
+function renderCat(id) {
+  if (LEARN_CATS.some((c) => c.id === id)) { ex = null; cat = id; return renderLearnCat(id, statLine); }
+  stopAll();
+  stopLearn();
+  ex = null;
+  cat = id;
+  const c = DICT_CATS.find((x) => x.id === id);
+  app.innerHTML = `
+    <header class="bar"><button class="back" data-act="home">${ICON.back}<span>Accueil</span></button><div class="bar-title">Dictée · ${esc(c.title)}</div></header>
+    <main class="home cat">
+      <p class="lede">${c.intro} Un niveau est validé à partir de 80 %.</p>
+      <div class="levels">${levelsOf(id).map((l) => `
+        <button class="level" data-act="start" data-id="${l.id}">
+          <span class="level-n">${LEVELS.indexOf(l) + 1}</span>
+          <span class="level-body">
+            <span class="level-title">${esc(l.title)}</span>
+            <span class="level-desc">${describeLevel(l).map(esc).join(' · ')}</span>
+            ${statLine(l.id)}
+          </span>
+        </button>`).join('')}</div>
+    </main>`;
+  window.scrollTo(0, 0);
+}
+
+function renderPrefs() {
+  stopAll();
+  stopLearn();
+  ex = null;
+  const all = [...LEARN_CATS.flatMap((c) => c.levels.map((l) => l.id)), ...LEVELS.map((l) => l.id)];
+  const done = all.filter(isDone).length;
+  const tries = Object.values(store.stats).reduce((a, x) => a + x.n, 0);
+  app.innerHTML = `
+    <header class="bar"><button class="back" data-act="home">${ICON.back}<span>Accueil</span></button><div class="bar-title">Préférences</div></header>
+    <main class="home cat">
+      <h2>Dictée</h2>
+      <div class="prefs">
+        <label class="switch"><input type="checkbox" data-pref="metro" ${store.prefs.metro ? 'checked' : ''}><span>Garder la pulsation pendant l'écoute <small>dictées avec rythme</small></span></label>
+        <label class="switch"><input type="checkbox" data-pref="echo" ${store.prefs.echo ? 'checked' : ''}><span>Entendre les notes que je pose <small>plus facile : à désactiver pour s'entraîner sérieusement</small></span></label>
+      </div>
+      <h2 style="margin-top:28px">Progression</h2>
+      <div class="prefs"><div class="switch"><span>${done} niveaux validés sur ${all.length} · ${tries} exercice${tries > 1 ? 's' : ''} terminé${tries > 1 ? 's' : ''}<small>Enregistrée sur cet appareil uniquement, dans ce navigateur.</small></span></div></div>
+      <button class="secondary danger" data-act="reset" style="margin-top:12px">Effacer ma progression</button>
     </main>`;
   window.scrollTo(0, 0);
 }
@@ -135,7 +177,7 @@ function renderCustom() {
       <div class="field"><h3>Nombre d'écoutes</h3>${seg('listens', [[1, 1], [2, 2], [3, 3], [5, 5], [0, 'Illimité']], c.listens)}</div>
       <div class="field"><h3>Tempo <span class="val" id="tempo-val">${c.tempo} à la noire</span></h3>
         <input type="range" min="40" max="100" step="2" value="${c.tempo}" data-range="tempo" aria-label="Tempo"></div>
-      <div class="field"><h3>Étendue</h3>${seg('range', [['0,7', 'do → do aigu'], ['-2,9', 'la grave → mi aigu']], c.range.join(','))}</div>
+      <div class="field"><h3>Étendue</h3>${seg('range', [['0,7', 'do → do aigu'], ['0,10', 'do → fa aigu'], ['-2,10', 'la grave → fa aigu']], c.range.join(','))}</div>
       <button class="primary big" data-act="start" data-id="custom">Commencer</button>
     </main>`;
 }
@@ -177,7 +219,7 @@ function renderExercise() {
     ? `Do majeur · ${l.count} notes · la première note (${startName()}) est déjà posée`
     : `Do majeur · 4/4 · ${l.measures} mesures · note de départ : ${startName()} · une mesure de pulsation précède la mélodie`;
   app.innerHTML = `
-    <header class="bar"><button class="back" data-act="home">${ICON.back}<span>Accueil</span></button><div class="bar-title">${n}${esc(l.title)}</div></header>
+    <header class="bar"><button class="back" data-act="back">${ICON.back}<span>${l.id === 'custom' ? 'Réglages' : 'Niveaux'}</span></button><div class="bar-title">${n}${esc(l.title)}</div></header>
     <main class="ex">
       <p class="brief">${brief}</p>
       <div class="listen">
@@ -430,6 +472,13 @@ app.addEventListener('click', (ev) => {
   if (!el || el.disabled) return;
   const d = el.dataset;
   if (d.act === 'home') return renderHome();
+  if (d.act === 'cat') return renderCat(d.id);
+  if (d.act === 'back') return ex && ex.level.id !== 'custom' && cat ? renderCat(cat) : ex ? renderCustom() : renderHome();
+  if (d.act === 'prefs') return renderPrefs();
+  if (d.act === 'reset') {
+    if (confirm('Effacer toute ta progression sur cet appareil ? Cette action est définitive.')) { store.stats = {}; save(); renderPrefs(); }
+    return;
+  }
   if (d.act === 'custom') return renderCustom();
   if (d.act === 'start') { save(); return start(levelById(d.id)); }
 

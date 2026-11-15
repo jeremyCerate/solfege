@@ -244,3 +244,24 @@ svg.score .nt.warn { color: var(--accent-text); }
 .beats span { width: 14px; height: 14px; border-radius: 50%; background: var(--line); }
 .beats span.on { background: var(--accent-text); }
 .dot.warn { background: var(--accent-text); }
+
+/* ---------- Catégories ---------- */
+.tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.tile {
+  display: grid; gap: 4px; align-content: start; text-align: left; min-height: 132px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.tile:hover { border-color: var(--accent); }
+.tile:active { transform: scale(0.99); }
+.tile-title { font: 700 19px/1.15 var(--display); text-transform: uppercase; letter-spacing: 0.04em; }
+.tile-desc { font-size: 13px; color: var(--muted); line-height: 1.35; }
+.meter { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: auto; align-self: end; }
+.meter i { display: block; height: 100%; background: var(--accent); }
+.tile-count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; align-self: end; }
+.cat { padding-top: 8px; }
+.cat .lede { margin-bottom: 16px; }
+.stat.todo { color: var(--accent-text); }
+.linkrow { width: 100%; text-align: left; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-weight: 600; }
+.linkrow::after { content: '›'; float: right; color: var(--muted); }
+.secondary.danger { color: var(--bad); border-color: var(--line); }
