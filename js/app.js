@@ -87,6 +87,7 @@ function renderHome() {
         <p class="eyebrow">Solfège</p>
         <h1>Lire, entendre, écrire</h1>
         <p class="lede">Commence par les bases, puis passe à la dictée. Tout est en do majeur.</p>
+        <p class="inspire">Inspiré de l'enseignement de Felipe Lesage, de <a href="https://www.psalliter.fr/" target="_blank" rel="noopener">Psalliter</a>.</p>
       </header>
       <section>
         <h2>Les bases</h2>

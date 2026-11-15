@@ -46,6 +46,8 @@ h1, h2, h3, p { margin: 0; }
 .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-text); font-weight: 600; }
 h1 { font: 600 36px/1.1 var(--serif); margin: 4px 0 10px; text-wrap: balance; }
 .lede { color: var(--muted); max-width: 54ch; }
+.inspire { margin-top: 8px; font-size: 14px; color: var(--accent-text); font-weight: 600; }
+.inspire a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .home section { margin-top: 28px; }
 h2 { font: 600 13px/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
 .levels { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
