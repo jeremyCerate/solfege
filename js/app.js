@@ -1,17 +1,19 @@
 import { LEVELS, DEFAULT_CUSTOM, describeLevel, generate, noteLabel, noteName, intervalInfo, MEASURE, BEAT } from './music.js';
 import { ensureAudio, playSequence, playStep, stopAll } from './audio.js';
 import { Score } from './staff.js';
+import { initLearn, stopLearn, learnCards } from './learn.js';
 
 const app = document.getElementById('app');
 const KEY = 'solfege.v1';
 
 // ---------- Sauvegarde locale ----------
-const store = { prefs: { input: 'staff', echo: false, metro: false }, stats: {}, custom: { ...DEFAULT_CUSTOM } };
+const store = { prefs: { input: 'staff', echo: false, metro: false }, stats: {}, custom: { ...DEFAULT_CUSTOM }, learn: {} };
 try {
   const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
   Object.assign(store.prefs, saved.prefs);
   Object.assign(store.stats, saved.stats);
   Object.assign(store.custom, saved.custom);
+  Object.assign(store.learn, saved.learn);
 } catch { /* première visite ou stockage indisponible */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch { /* ignore */ } };
 
@@ -47,14 +49,15 @@ function toast(msg) {
 }
 
 // ---------- Accueil ----------
-function statLine(id) {
+function statLine(id, unit = 'dictée') {
   const st = store.stats[id];
   if (!st) return '<span class="stat none">Pas encore essayé</span>';
-  return `<span class="stat">Meilleur ${Math.round(st.best * 100)} % · ${st.n} dictée${st.n > 1 ? 's' : ''}</span>`;
+  return `<span class="stat">Meilleur ${Math.round(st.best * 100)} % · ${st.n} ${unit}${st.n > 1 ? 's' : ''}</span>`;
 }
 
 function renderHome() {
   stopAll();
+  stopLearn();
   ex = null;
   const card = (l, n) => `
     <button class="level" data-act="start" data-id="${l.id}">
@@ -71,19 +74,23 @@ function renderHome() {
     <main class="home">
       <header class="hero">
         <p class="eyebrow">Solfège</p>
-        <h1>Dictée musicale</h1>
-        <p class="lede">Écoute la mélodie au piano, puis replace les notes sur la portée. Tout est en do majeur, et la mélodie part du do grave.</p>
+        <h1>Lire, entendre, écrire</h1>
+        <p class="lede">Commence par les bases, puis passe à la dictée : écoute la mélodie au piano et replace les notes sur la portée. Tout est en do majeur.</p>
       </header>
       <section>
-        <h2>Hauteurs seules</h2>
+        <h2>Les bases</h2>
+        <div class="levels">${learnCards(statLine)}</div>
+      </section>
+      <section>
+        <h2>Dictée · hauteurs seules</h2>
         <div class="levels">${pitch.map((l, i) => card(l, i + 1)).join('')}</div>
       </section>
       <section>
-        <h2>Hauteurs et rythme</h2>
+        <h2>Dictée · hauteurs et rythme</h2>
         <div class="levels">${rhythm.map((l, i) => card(l, pitch.length + i + 1)).join('')}</div>
       </section>
       <section>
-        <h2>À ta mesure</h2>
+        <h2>Dictée · à ta mesure</h2>
         <div class="levels">
           <button class="level" data-act="custom">
             <span class="level-n">✎</span>
@@ -113,7 +120,7 @@ function renderCustom() {
   const seg = (name, opts, val) => `<div class="seg" role="group">${opts.map(([v, lab]) => `<button data-set="${name}" data-val="${v}" class="${String(v) === String(val) ? 'on' : ''}">${lab}</button>`).join('')}</div>`;
   const chips = (name, opts, on) => `<div class="chips">${opts.map(([v, lab]) => `<button data-toggle="${name}" data-val="${v}" class="chip ${on(v) ? 'on' : ''}">${lab}</button>`).join('')}</div>`;
   app.innerHTML = `
-    <header class="bar"><button class="back" data-act="home">${ICON.back}<span>Niveaux</span></button><div class="bar-title">Dictée personnalisée</div></header>
+    <header class="bar"><button class="back" data-act="home">${ICON.back}<span>Accueil</span></button><div class="bar-title">Dictée personnalisée</div></header>
     <main class="custom">
       <div class="field"><h3>Type de dictée</h3>${seg('mode', [['pitch', 'Hauteurs seules'], ['rhythm', 'Hauteurs + rythme']], c.mode)}</div>
       ${c.mode === 'pitch'
@@ -170,7 +177,7 @@ function renderExercise() {
     ? `Do majeur · ${l.count} notes · la première note (${startName()}) est déjà posée`
     : `Do majeur · 4/4 · ${l.measures} mesures · note de départ : ${startName()} · une mesure de pulsation précède la mélodie`;
   app.innerHTML = `
-    <header class="bar"><button class="back" data-act="home">${ICON.back}<span>Niveaux</span></button><div class="bar-title">${n}${esc(l.title)}</div></header>
+    <header class="bar"><button class="back" data-act="home">${ICON.back}<span>Accueil</span></button><div class="bar-title">${n}${esc(l.title)}</div></header>
     <main class="ex">
       <p class="brief">${brief}</p>
       <div class="listen">
@@ -336,6 +343,15 @@ function playIt(events, which) {
   updateListen();
 }
 
+function record(id, ratio) {
+  const st = store.stats[id] || { n: 0, best: 0, sum: 0 };
+  st.n++;
+  st.sum += ratio;
+  st.best = Math.max(st.best, ratio);
+  store.stats[id] = st;
+  save();
+}
+
 // ---------- Correction ----------
 function check() {
   stopAll();
@@ -385,12 +401,7 @@ function check() {
   }
   ex.phase = 'result';
   const ratio = total ? ok / total : 0;
-  const st = store.stats[ex.level.id] || { n: 0, best: 0, sum: 0 };
-  st.n++;
-  st.sum += ratio;
-  st.best = Math.max(st.best, ratio);
-  store.stats[ex.level.id] = st;
-  save();
+  record(ex.level.id, ratio);
 
   const verdict = ratio === 1 ? 'Sans faute !' : ratio >= 0.75 ? 'Très bien, presque tout y est.' : ratio >= 0.5 ? 'En bonne voie.' : 'À retravailler.';
   const unit = isPitch() ? 'notes justes' : 'éléments justes (hauteur et durée)';
@@ -486,6 +497,7 @@ app.addEventListener('input', (ev) => {
   }
 });
 
+initLearn({ app, store, save, record });
 renderHome();
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

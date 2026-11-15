@@ -12,7 +12,9 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const r1 = (n) => Math.round(n * 10) / 10;
 
 export class Score {
-  constructor(host, { mode, slots = 0, measures = 0, onPointer = null }) {
+  constructor(host, { mode, slots = 0, measures = 0, onPointer = null, size = 11, dots = true }) {
+    this.size = size;
+    this.dots = dots;
     this.host = host;
     this.mode = mode;
     this.slots = slots;
@@ -37,7 +39,7 @@ export class Score {
   setData(data) { this.data = data; this.render(); }
 
   geom() {
-    const s = 11;
+    const s = this.size;
     const g = { s, sysH: 12 * s, top: 4.3 * s, clefW: 4.4 * s };
     if (this.mode === 'pitch') {
       const avail = this.width - g.clefW - 0.8 * s;
@@ -171,7 +173,7 @@ export class Score {
         h += `<line x1="${W - 0.8}" x2="${W - 0.8}" y1="${top}" y2="${top + 4 * s}"/>`;
       }
       h += '</g>';
-      if (pitch) {
+      if (pitch && this.dots) {
         // repères : un point par note attendue
         for (let i = sys * g.per; i < Math.min(this.slots, (sys + 1) * g.per); i++) {
           const p = this.posSlot(g, i);

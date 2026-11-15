@@ -1,8 +1,8 @@
 // Hors-ligne : le réseau d'abord (pour toujours avoir la dernière version), le cache en secours.
-const CACHE = 'solfege-v3';
+const CACHE = 'solfege-v4';
 const ASSETS = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
-  'js/app.js', 'js/music.js', 'js/audio.js', 'js/staff.js',
+  'js/app.js', 'js/music.js', 'js/audio.js', 'js/staff.js', 'js/learn.js',
   ...['A3', 'C4', 'Ds4', 'Fs4', 'A4', 'C5', 'Ds5', 'Fs5'].map((n) => `piano/${n}.mp3`),
   'fonts/Bravura.woff2', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-512.png',
 ];
