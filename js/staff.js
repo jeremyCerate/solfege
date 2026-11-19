@@ -259,6 +259,11 @@ export class Score {
       h += o + '</g>';
     }
 
+    // --- paroles ---
+    for (const p of placed) {
+      if (p.lyric) h += `<text class="lyric" x="${r1(p.x)}" y="${r1(p.sys * g.sysH + g.top + 7.3 * s)}">${p.lyric}</text>`;
+    }
+
     // --- étiquette pendant le glisser ---
     if (d.label && placed[d.label.index]) {
       const p = placed[d.label.index];

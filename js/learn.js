@@ -2,6 +2,7 @@
 import { NAMES, noteName, intervalInfo, mod, midi, BEAT, generateRhythm } from './music.js';
 import { ensureAudio, playSequence, playStep, stopAll, perfTimeOf, tapSound } from './audio.js';
 import { Score } from './staff.js';
+import { chantCard, mountChants, unmountChants } from './chant.js';
 
 let env = null; // { app, store, save, record }
 let st = null; // état de la série en cours
@@ -75,6 +76,7 @@ export function initLearn(e) {
 
 export function stopLearn() {
   clearTimeout(timer);
+  unmountChants();
   if (st && st.playing) st.playing.stop();
   st = null;
   if (score) { score.destroy(); score = null; }
@@ -202,6 +204,7 @@ function openIv(level) {
       <div class="listen"><button class="play" data-learn="replay">${PLAY}<span><strong>Écouter</strong><small>autant de fois que tu veux</small></span></button></div>
       <div class="sheet"><div class="sheet-label" id="sheet-label"></div><div id="score"></div></div>
       <p class="feedback" id="feedback" role="status"></p>
+      <div id="chant"></div>
       <div id="result"></div>
     </main>
     <footer class="pad" id="pad"></footer>`;
@@ -229,6 +232,8 @@ function nextIv() {
   st.answered = null;
   document.getElementById('feedback').textContent = 'Quel est cet intervalle ?';
   document.getElementById('feedback').className = 'feedback';
+  unmountChants();
+  document.getElementById('chant').innerHTML = '';
   drawIv();
   playIv();
 }
@@ -274,6 +279,11 @@ function answerIv(k) {
   if (info.chant && info.dir === 'ascendante') txt += ` Pense à « ${info.chant} ».`;
   const fb = document.getElementById('feedback');
   fb.textContent = txt;
+  if (info.chant && info.dir === 'ascendante') {
+    const box = document.getElementById('chant');
+    box.innerHTML = chantCard(info.name);
+    mountChants(box);
+  }
   fb.className = 'feedback ' + (good ? 'ok' : 'bad');
   drawIv();
   playIv();

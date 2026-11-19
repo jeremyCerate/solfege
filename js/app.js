@@ -1,6 +1,7 @@
 import { LEVELS, DEFAULT_CUSTOM, describeLevel, generate, noteLabel, noteName, intervalInfo, MEASURE, BEAT } from './music.js';
 import { ensureAudio, playSequence, playStep, stopAll } from './audio.js';
 import { Score } from './staff.js';
+import { chantCard, mountChants, unmountChants } from './chant.js';
 import { initLearn, stopLearn, LEARN_CATS, renderLearnCat } from './learn.js';
 
 const app = document.getElementById('app');
@@ -195,6 +196,7 @@ const initialEvents = () => (isPitch() ? [{ step: ex.mel[0].step, dur: BEAT, fix
 const startName = () => noteName(ex.mel[0].step);
 
 function start(level, melody = null) {
+  unmountChants();
   ensureAudio();
   stopAll();
   ex = {
@@ -403,6 +405,7 @@ function check() {
   const mel = ex.mel;
   let ok = 0, total = 0;
   const hints = [];
+  const chants = new Set();
   if (isPitch()) {
     ex.shown = mel.map((m, i) => {
       const u = ex.events[i];
@@ -418,7 +421,7 @@ function check() {
       const info = intervalInfo(mel[i - 1].step, m.step);
       let txt = `<strong>Note ${i + 1}</strong> : c'était ${noteName(m.step)}. De ${noteName(mel[i - 1].step)} à ${noteName(m.step)}, `;
       txt += info.size === 0 ? 'la note est répétée.' : `c'est une ${info.name} ${info.dir}.`;
-      if (info.chant && info.dir === 'ascendante') txt += ` Pense à <em>${info.chant}</em>.`;
+      if (info.chant && info.dir === 'ascendante') { txt += ` Pense à <em>${info.chant}</em>.`; chants.add(info.name); }
       hints.push(txt);
     });
   } else {
@@ -454,7 +457,9 @@ function check() {
       <div class="result-text"><p class="verdict">${verdict}</p><p>${ok} sur ${total} ${unit}.</p></div>
     </div>
     ${hints.length ? `<ul class="hints">${hints.map((x) => `<li>${x}</li>`).join('')}</ul>` : ''}
+    ${[...chants].map(chantCard).join('')}
     <p class="legend"><span class="dot ok"></span>juste <span class="dot bad"></span>à revoir <span class="dot ghost"></span>${isPitch() ? 'la bonne note' : 'ce qui manquait'}</p>`;
+  mountChants(document.getElementById('result'));
   document.getElementById('answer-label').textContent = 'Ta réponse';
   if (!isPitch()) {
     document.getElementById('solution-wrap').innerHTML = '<div class="sheet"><div class="sheet-label">La mélodie</div><div id="solution"></div></div>';

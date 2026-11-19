@@ -20,7 +20,7 @@ const CHANTS = {
   'tierce majeure': 'In manus tuas, Pater',
   'quarte juste': 'Ostende nobis Domine',
   'quinte juste': 'Esprit consolateur',
-};
+}; // partitions : chant.js
 
 export function intervalInfo(a, b) {
   const size = Math.abs(b - a);
