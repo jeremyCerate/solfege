@@ -50,6 +50,8 @@ h1 { font: 600 36px/1.1 var(--serif); margin: 4px 0 10px; text-wrap: balance; }
 .inspire a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .home section { margin-top: 28px; }
 h2 { font: 600 13px/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+.level-group { grid-column: 1 / -1; margin: 14px 0 0; }
+.level-group:first-child { margin-top: 0; }
 .levels { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .level {
   display: flex; gap: 14px; align-items: flex-start; text-align: left;

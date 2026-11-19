@@ -15,11 +15,21 @@ const READ_COUNT = 20;
 const IV_COUNT = 15;
 const IV_NAMES = ['', 'Seconde', 'Tierce', 'Quarte', 'Quinte', 'Sixte', 'Septième', 'Octave'];
 
+// step 0 = do du milieu (do grave de la clé de sol, sur la ligne supplémentaire du dessous)
+const G = (lo, hi) => [{ clef: 'g', range: [lo, hi] }];
+const F = (lo, hi) => [{ clef: 'f', range: [lo, hi] }];
 const READ_LEVELS = [
-  { id: 'read1', title: 'De do à sol', desc: 'Les cinq premières notes', range: [0, 4] },
-  { id: 'read2', title: 'De do à do aigu', desc: 'Toute la gamme', range: [0, 7] },
-  { id: 'read3', title: "Jusqu'au fa aigu", desc: 'La gamme et le haut de la portée : ré, mi, fa aigus', range: [0, 10] },
-  { id: 'read4', title: 'Du la grave au fa aigu', desc: 'Toute la portée, avec les notes sous le do', range: [-2, 10] },
+  { id: 'read1', group: 'Clé de sol', title: 'De do à sol', desc: 'Les cinq premières notes', parts: G(0, 4) },
+  { id: 'read2', group: 'Clé de sol', title: 'De do à do aigu', desc: 'Toute la gamme', parts: G(0, 7) },
+  { id: 'read3', group: 'Clé de sol', title: "Jusqu'au fa aigu", desc: 'La gamme et le haut de la portée : ré, mi, fa aigus', parts: G(0, 10) },
+  { id: 'read4', group: 'Clé de sol', title: 'Du la grave au fa aigu', desc: 'Toute la portée, avec les notes sous le do', parts: G(-2, 10) },
+  { id: 'read5', group: 'Clé de sol', title: 'Au-dessus de la portée', desc: 'Du do aigu au do suraigu, avec les lignes supplémentaires', parts: G(7, 14) },
+  { id: 'read6', group: 'Clé de sol', title: 'Toute la clé de sol', desc: 'Du fa grave au do suraigu', parts: G(-4, 14) },
+  { id: 'readf1', group: 'Clé de fa', title: 'Du do au fa', desc: 'Le do du milieu, au-dessus de la portée, et les notes qui descendent jusqu\u2019au fa de la clé', parts: F(-4, 0) },
+  { id: 'readf2', group: 'Clé de fa', title: 'Une octave', desc: 'Du do du milieu au do grave', parts: F(-7, 0) },
+  { id: 'readf3', group: 'Clé de fa', title: 'Toute la portée', desc: 'Du sol grave, première ligne, au do du milieu', parts: F(-10, 0) },
+  { id: 'readf4', group: 'Clé de fa', title: 'Avec les lignes supplémentaires', desc: 'Du do très grave au mi au-dessus du do du milieu', parts: F(-14, 2) },
+  { id: 'readmix', group: 'Les deux clés', title: 'Clé de sol et clé de fa', desc: 'La clé change d\u2019une note à l\u2019autre : regarde-la avant de lire', parts: [...G(-2, 10), ...F(-10, 0)] },
 ];
 const IV_LEVELS = [
   { id: 'iv1', title: 'Depuis do, de la seconde à la quinte', desc: 'do-ré, do-mi, do-fa, do-sol', from: 'do', max: 4 },
@@ -78,7 +88,7 @@ export function renderLearnCat(id, statLine) {
     ${bar(c.title)}
     <main class="home cat">
       <p class="lede">${c.intro} Un niveau est validé à partir de 80 %.</p>
-      <div class="levels">${c.levels.map((l, i) => `
+      <div class="levels">${c.levels.map((l, i) => `${l.group && l.group !== (c.levels[i - 1] || {}).group ? `<h2 class="level-group">${l.group}</h2>` : ''}
         <button class="level" data-learn="open" data-id="${l.id}">
           <span class="level-n">${i + 1}</span>
           <span class="level-body">
@@ -91,9 +101,9 @@ export function renderLearnCat(id, statLine) {
   window.scrollTo(0, 0);
 }
 
-function mountScore(slots) {
+function mountScore(slots, clef = 'g') {
   if (score) score.destroy();
-  score = new Score(document.getElementById('score'), { mode: 'pitch', slots, size: 15, dots: false });
+  score = new Score(document.getElementById('score'), { mode: 'pitch', slots, size: 15, dots: false, clef });
 }
 
 // ---------- Lecture de notes ----------
@@ -101,8 +111,7 @@ function openRead(level) {
   stopLearn();
   stopAll();
   ensureAudio();
-  const [lo, hi] = level.range;
-  st = { kind: 'read', level, lo, hi, i: 0, ok: 0, cur: null, times: [], miss: {}, locked: false, picked: null };
+  st = { kind: 'read', level, part: null, i: 0, ok: 0, cur: null, times: [], miss: {}, locked: false, picked: null };
   env.app.innerHTML = `
     ${bar(level.title, 'read')}
     <main class="ex learn">
@@ -112,15 +121,21 @@ function openRead(level) {
       <div id="result"></div>
     </main>
     <footer class="pad" id="pad"></footer>`;
-  mountScore(1);
+  mountScore(1, level.parts[0].clef);
   nextRead();
   window.scrollTo(0, 0);
 }
 
 function nextRead() {
-  let s;
-  do { s = st.lo + rnd(st.hi - st.lo + 1); } while (s === st.cur);
+  let part, s;
+  do {
+    part = st.level.parts[rnd(st.level.parts.length)];
+    const [lo, hi] = part.range;
+    s = lo + rnd(hi - lo + 1);
+  } while (s === st.cur && part === st.part);
   st.cur = s;
+  st.part = part;
+  score.setClef(part.clef);
   st.locked = false;
   st.picked = null;
   st.t0 = performance.now();

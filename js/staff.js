@@ -5,6 +5,7 @@ import { MEASURE, BEAT } from './music.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const G = {
+  fClef: '\uE062',
   clef: '', whole: '', half: '', black: '',
   restQ: '', restH: '', flagUp: '', flagDown: '', four: '',
 };
@@ -12,7 +13,8 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const r1 = (n) => Math.round(n * 10) / 10;
 
 export class Score {
-  constructor(host, { mode, slots = 0, measures = 0, onPointer = null, size = 11, dots = true, single = false }) {
+  constructor(host, { mode, slots = 0, measures = 0, onPointer = null, size = 11, dots = true, single = false, clef = 'g' }) {
+    this.setClef(clef);
     this.single = single; // portée à une ligne, pour la lecture de rythme
     this.size = size;
     this.dots = dots;
@@ -39,6 +41,10 @@ export class Score {
 
   setData(data) { this.data = data; this.render(); }
 
+  // Clé de fa : le do du milieu (step 0) passe sur la 1re ligne supplémentaire au-dessus,
+  // soit 12 demi-interlignes plus haut qu'en clé de sol.
+  setClef(clef) { this.clef = clef; this.shift = clef === 'f' ? 12 : 0; }
+
   geom() {
     const s = this.size;
     const g = this.single
@@ -60,7 +66,7 @@ export class Score {
 
   x0(g, sys) { return g.clefW + (this.mode === 'rhythm' && sys === 0 ? 2.6 * g.s : 0); }
   posSlot(g, i) { return { sys: Math.floor(i / g.per), x: g.clefW + ((i % g.per) + 0.5) * g.slotW }; }
-  y(g, sys, step) { return sys * g.sysH + g.top + 4 * g.s - ((step - 2) * g.s) / 2; }
+  y(g, sys, step) { return sys * g.sysH + g.top + 4 * g.s - ((step + this.shift - 2) * g.s) / 2; }
 
   render() {
     const g = (this.g = this.geom());
@@ -155,7 +161,7 @@ export class Score {
       h += '<g class="lines">';
       for (let k = 0; k < 5; k++) if (!this.single || k === 2) h += `<line x1="0.5" x2="${W - 0.5}" y1="${r1(top + k * s)}" y2="${r1(top + k * s)}"/>`;
       h += '</g><g class="ink">';
-      if (!this.single) h += glyph(0.6 * s, this.y(g, sys, 4), G.clef);
+      if (!this.single) h += this.clef === 'f' ? glyph(0.6 * s, this.y(g, sys, 8 - this.shift), G.fClef) : glyph(0.6 * s, this.y(g, sys, 4), G.clef);
       if (!pitch && sys === 0) {
         h += glyph(g.clefW - 0.3 * s, this.y(g, sys, 8), G.four) + glyph(g.clefW - 0.3 * s, this.y(g, sys, 4), G.four);
       }
@@ -197,9 +203,10 @@ export class Score {
       const hw = (ch === G.whole ? 1.69 : 1.18) * s;
       const xl = x - hw / 2;
       let o = `<g class="nt ${cls || ''}">`;
-      for (const L of [0, -2]) {
-        if (p.step <= L) {
-          const yl = r1(this.y(g, p.sys, L));
+      const ds = p.step + this.shift; // position sur la portée, quelle que soit la clé
+      for (const L of [0, -2, -4, 12, 14, 16]) {
+        if (L <= 0 ? ds <= L : ds >= L) {
+          const yl = r1(this.y(g, p.sys, L - this.shift));
           o += `<line class="ledger" x1="${r1(xl - 0.45 * s)}" x2="${r1(xl + hw + 0.45 * s)}" y1="${yl}" y2="${yl}"/>`;
         }
       }
@@ -207,7 +214,7 @@ export class Score {
       if (stems && p.dur < 48) {
         const grp = p.group;
         const beamed = grp && grp.items.length > 1;
-        const down = grp ? grp.down : p.step >= 6 && !this.single;
+        const down = grp ? grp.down : p.step + this.shift >= 6 && !this.single;
         const sx = down ? xl + 0.07 * s : xl + hw - 0.07 * s;
         const y1 = down ? yN + 0.17 * s : yN - 0.17 * s;
         const y2 = beamed ? grp.beamY : down ? yN + 3.5 * s : yN - 3.5 * s;

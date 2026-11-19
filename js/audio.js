@@ -9,7 +9,10 @@ let wave = null;
 const live = new Set();
 
 // note MIDI -> fichier
-const SAMPLES = { 57: 'A3', 60: 'C4', 63: 'Ds4', 66: 'Fs4', 69: 'A4', 72: 'C5', 75: 'Ds5', 78: 'Fs5' };
+const SAMPLES = {
+  36: 'C2', 39: 'Ds2', 42: 'Fs2', 45: 'A2', 48: 'C3', 51: 'Ds3', 54: 'Fs3',
+  57: 'A3', 60: 'C4', 63: 'Ds4', 66: 'Fs4', 69: 'A4', 72: 'C5', 75: 'Ds5', 78: 'Fs5', 81: 'A5', 84: 'C6',
+};
 const raw = {}; // fichiers téléchargés, pas encore décodés
 const buffers = {}; // sons prêts à jouer
 const pending = new Set(); // décodages en cours
