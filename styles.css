@@ -281,3 +281,6 @@ svg.score .lyric { font: 500 13px var(--sans); fill: var(--ink); text-anchor: mi
 .iv-from { margin: 4px 0 14px; }
 .iv-from .seg { display: grid; grid-template-columns: repeat(4, 1fr); }
 .iv-from .seg button { padding: 8px 4px; white-space: nowrap; }
+.transfer { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#transfer .hint { margin: 12px 0 8px; font-size: 14px; color: var(--muted); }
+textarea.code { width: 100%; font: 12px/1.4 ui-monospace, Menlo, monospace; padding: 10px; border: 1px solid var(--ink); border-radius: 8px; background: var(--surface); color: var(--ink); word-break: break-all; resize: vertical; }

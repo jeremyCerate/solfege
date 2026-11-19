@@ -152,8 +152,13 @@ function renderPrefs() {
         <label class="switch"><input type="checkbox" data-pref="echo" ${store.prefs.echo ? 'checked' : ''}><span>Entendre les notes que je pose <small>plus facile : à désactiver pour s'entraîner sérieusement</small></span></label>
       </div>
       <h2 style="margin-top:28px">Progression</h2>
-      <div class="prefs"><div class="switch"><span>${done} niveaux validés sur ${all.length} · ${tries} exercice${tries > 1 ? 's' : ''} terminé${tries > 1 ? 's' : ''}<small>Enregistrée sur cet appareil uniquement, dans ce navigateur.</small></span></div></div>
-      <button class="secondary danger" data-act="reset" style="margin-top:12px">Effacer ma progression</button>
+      <div class="prefs"><div class="switch"><span>${done} niveaux validés sur ${all.length} · ${tries} exercice${tries > 1 ? 's' : ''} terminé${tries > 1 ? 's' : ''}<small>Enregistrée dans ce navigateur. Pour la retrouver sur un autre appareil, copie-la ici puis colle-la là-bas.</small></span></div></div>
+      <div class="row actions transfer">
+        <button class="secondary" data-act="export">Copier ma progression</button>
+        <button class="secondary" data-act="import">Coller une progression</button>
+      </div>
+      <div id="transfer"></div>
+      <button class="secondary danger" data-act="reset" style="margin-top:20px">Effacer ma progression</button>
     </main>`;
   window.scrollTo(0, 0);
 }
@@ -388,6 +393,65 @@ function playIt(events, which) {
   updateListen();
 }
 
+// ---------- Transfert de la progression d'un appareil à l'autre ----------
+// Un code texte à copier sur un appareil et à coller sur l'autre (le presse-papiers
+// est partagé entre Mac et iPhone sur un même compte iCloud). Rien ne passe par un serveur.
+const CODE_PREFIX = 'SOLFEGE-PSALLITER-1:';
+
+function exportProgress() {
+  const code = CODE_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify({ stats: store.stats }))));
+  const box = document.getElementById('transfer');
+  const fallback = () => {
+    box.innerHTML = `<p class="hint">Copie ce code (tout sélectionner, puis Copier), puis colle-le sur ton autre appareil :</p><textarea id="transfer-text" class="code" rows="4" readonly>${code}</textarea>`;
+    const t = document.getElementById('transfer-text');
+    t.focus();
+    t.select();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(code).then(() => {
+      box.innerHTML = '<p class="hint">Copiée. Sur ton autre appareil, ouvre Préférences et touche « Coller une progression ».</p>';
+    }, fallback);
+  } else fallback();
+}
+
+function importProgress() {
+  const box = document.getElementById('transfer');
+  const manual = () => {
+    box.innerHTML = `<p class="hint">Colle ici le code copié sur ton autre appareil :</p><textarea id="transfer-text" class="code" rows="4" placeholder="SOLFEGE-PSALLITER-1:…"></textarea><button class="primary" data-act="import-text" style="margin-top:10px;width:100%">Importer</button>`;
+    document.getElementById('transfer-text').focus();
+  };
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    navigator.clipboard.readText().then((txt) => (txt.trim().startsWith(CODE_PREFIX) ? applyImport(txt) : manual()), manual);
+  } else manual();
+}
+
+function applyImport(txt) {
+  let incoming;
+  try {
+    const raw = txt.trim();
+    if (!raw.startsWith(CODE_PREFIX)) throw new Error('prefix');
+    incoming = JSON.parse(decodeURIComponent(escape(atob(raw.slice(CODE_PREFIX.length))))).stats;
+    if (!incoming || typeof incoming !== 'object') throw new Error('stats');
+  } catch {
+    toast("Ce code n'est pas une progression valide.");
+    return;
+  }
+  // Fusion : on garde le meilleur score de chaque niveau, et l'historique le plus fourni.
+  let changed = 0;
+  for (const [id, r] of Object.entries(incoming)) {
+    if (!r || typeof r.n !== 'number') continue;
+    const l = store.stats[id];
+    if (!l) { store.stats[id] = { n: r.n, best: r.best || 0, sum: r.sum || 0 }; changed++; continue; }
+    const before = JSON.stringify(l);
+    if (r.n > l.n) { l.n = r.n; l.sum = r.sum || 0; }
+    l.best = Math.max(l.best || 0, r.best || 0);
+    if (JSON.stringify(l) !== before) changed++;
+  }
+  save();
+  renderPrefs();
+  toast(changed ? `Progression importée : ${changed} niveau${changed > 1 ? 'x' : ''} mis à jour.` : 'Rien de nouveau : cet appareil était déjà à jour.');
+}
+
 function record(id, ratio) {
   const st = store.stats[id] || { n: 0, best: 0, sum: 0 };
   st.n++;
@@ -481,6 +545,9 @@ app.addEventListener('click', (ev) => {
   if (d.act === 'cat') return renderCat(d.id);
   if (d.act === 'back') return ex && ex.level.id !== 'custom' && cat ? renderCat(cat) : ex ? renderCustom() : renderHome();
   if (d.act === 'prefs') return renderPrefs();
+  if (d.act === 'export') return exportProgress();
+  if (d.act === 'import') return importProgress();
+  if (d.act === 'import-text') return applyImport(document.getElementById('transfer-text').value);
   if (d.act === 'reset') {
     if (confirm('Effacer toute ta progression sur cet appareil ? Cette action est définitive.')) { store.stats = {}; save(); renderPrefs(); }
     return;
