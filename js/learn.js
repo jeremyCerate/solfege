@@ -32,12 +32,20 @@ const READ_LEVELS = [
   { id: 'readf4', group: 'Clé de fa', title: 'Avec les lignes supplémentaires', desc: 'Du do très grave au mi au-dessus du do du milieu', parts: F(-14, 2) },
   { id: 'readmix', group: 'Les deux clés', title: 'Clé de sol et clé de fa', desc: 'La clé change d\u2019une note à l\u2019autre : regarde-la avant de lire', parts: [...G(-2, 10), ...F(-10, 0)] },
 ];
+// sizes : intervalles proposés (1 = seconde … 7 = octave) ; dir : up, down ou both
+const S2_5 = [1, 2, 3, 4];
 const IV_LEVELS = [
-  { id: 'iv1', title: 'Depuis do, de la seconde à la quinte', desc: 'do-ré, do-mi, do-fa, do-sol', from: 'do', max: 4 },
-  { id: 'iv2', title: "Depuis do, jusqu'à l'octave", desc: "Avec la sixte, la septième et l'octave", from: 'do', max: 7 },
-  { id: 'iv3', title: 'Depuis toute note, de la seconde à la quinte', desc: 'Montants et descendants', from: 'all', max: 4 },
-  { id: 'iv4', title: "Depuis toute note, jusqu'à l'octave", desc: 'Tous les intervalles, montants et descendants', from: 'all', max: 7 },
+  { id: 'iv1', group: 'Depuis do', title: 'De la seconde à la quinte', desc: 'do-ré, do-mi, do-fa, do-sol', from: 'do', sizes: S2_5, dir: 'up' },
+  { id: 'iv2', group: 'Depuis do', title: "Jusqu'à l'octave", desc: "Avec la sixte, la septième et l'octave", from: 'do', sizes: [1, 2, 3, 4, 5, 6, 7], dir: 'up' },
+  { id: 'iv5', group: 'De la seconde à la quinte, depuis toute note', title: 'Seconde ou tierce ?', desc: 'Montants : pas conjoint ou petit saut', from: 'all', sizes: [1, 2], dir: 'up' },
+  { id: 'iv6', group: 'De la seconde à la quinte, depuis toute note', title: 'Tierce ou quarte ?', desc: 'Montants : In manus tuas ou Ostende nobis', from: 'all', sizes: [2, 3], dir: 'up' },
+  { id: 'iv7', group: 'De la seconde à la quinte, depuis toute note', title: 'Quarte ou quinte ?', desc: 'Montants : Ostende nobis ou Esprit consolateur', from: 'all', sizes: [3, 4], dir: 'up' },
+  { id: 'iv8', group: 'De la seconde à la quinte, depuis toute note', title: 'Les quatre, montants', desc: 'Seconde, tierce, quarte, quinte vers le haut', from: 'all', sizes: S2_5, dir: 'up' },
+  { id: 'iv9', group: 'De la seconde à la quinte, depuis toute note', title: 'Les quatre, descendants', desc: 'Seconde, tierce, quarte, quinte vers le bas', from: 'all', sizes: S2_5, dir: 'down' },
+  { id: 'iv3', group: 'De la seconde à la quinte, depuis toute note', title: 'Montants et descendants', desc: 'Les quatre intervalles, dans les deux sens', from: 'all', sizes: S2_5, dir: 'both' },
+  { id: 'iv4', group: "Jusqu'à l'octave", title: 'Depuis toute note', desc: 'Tous les intervalles, montants et descendants', from: 'all', sizes: [1, 2, 3, 4, 5, 6, 7], dir: 'both' },
 ];
+const IV_FROM = [['rnd', 'Au hasard'], ...NAMES.map((n, k) => [String(k), n])];
 const RH_LEVELS = [
   { id: 'rh1', title: 'Noires et blanches', desc: 'La pulsation et les valeurs longues', figs: {} },
   { id: 'rh2', title: 'Croches et silences', desc: 'Deux notes par temps, soupirs et demi-pauses', figs: { croches: true, silences: true } },
@@ -196,11 +204,15 @@ function openIv(level) {
   stopLearn();
   stopAll();
   ensureAudio();
-  st = { kind: 'iv', level, max: level.max, from: level.from, i: 0, ok: 0, a: 0, b: 0, answered: null, miss: {} };
+  const p = prefs();
+  p.ivFrom ||= 'rnd';
+  const start = level.from === 'do' ? 0 : p.ivFrom === 'rnd' ? null : Number(p.ivFrom);
+  st = { kind: 'iv', level, sizes: level.sizes, dir: level.dir, start, i: 0, ok: 0, a: 0, b: 0, answered: null, miss: {} };
   env.app.innerHTML = `
     ${bar(level.title, 'iv')}
     <main class="ex learn">
       <p class="progress" id="progress"></p>
+      ${level.from === 'do' ? '' : `<div class="field iv-from"><h3>Note de départ</h3>${seg('ivFrom', IV_FROM, p.ivFrom)}</div>`}
       <div class="listen"><button class="play" data-learn="replay">${PLAY}<span><strong>Écouter</strong><small>autant de fois que tu veux</small></span></button></div>
       <div class="sheet"><div class="sheet-label" id="sheet-label"></div><div id="score"></div></div>
       <p class="feedback" id="feedback" role="status"></p>
@@ -215,16 +227,14 @@ function openIv(level) {
 
 function nextIv() {
   let a, b;
-  for (;;) {
-    const size = 1 + rnd(st.max);
-    if (st.from === 'do') { a = 0; b = size; }
-    else {
-      a = rnd(8);
-      b = a + (Math.random() < 0.5 ? size : -size);
-    }
-    if (b < 0 || b > 7) continue;
+  for (let tries = 0; ; tries++) {
+    const size = st.sizes[rnd(st.sizes.length)];
+    const up = st.dir === 'up' || (st.dir === 'both' && Math.random() < 0.5);
+    a = st.start ?? (up ? rnd(7) : 1 + rnd(7)); // do à si, ou ré à do aigu en descendant
+    b = up ? a + size : a - size;
+    if (b < -4 || b > 11) continue;
     if (Math.abs(midi(b) - midi(a)) === 6) continue; // pas de triton
-    if (a === st.a && b === st.b) continue;
+    if (a === st.a && b === st.b && tries < 50) continue;
     break;
   }
   st.a = a;
@@ -261,9 +271,8 @@ function drawIv() {
   if (done) {
     pad.innerHTML = `<div class="row actions"><button class="secondary" data-learn="replay">Réécouter</button><button class="primary" data-learn="next">${st.i + 1 >= IV_COUNT ? 'Résultat' : 'Suivant'}</button></div>`;
   } else {
-    let h = '';
-    for (let k = 1; k <= st.max; k++) h += `<button class="namebtn" data-learn="iv" data-val="${k}">${IV_NAMES[k]}</button>`;
-    pad.innerHTML = `<div class="row names" style="--n:${st.max > 4 ? 4 : st.max}">${h}</div>`;
+    const h = st.sizes.map((k) => `<button class="namebtn" data-learn="iv" data-val="${k}">${IV_NAMES[k]}</button>`).join('');
+    pad.innerHTML = `<div class="row names" style="--n:${Math.min(st.sizes.length, 4)}">${h}</div>`;
   }
 }
 

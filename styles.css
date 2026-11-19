@@ -278,3 +278,6 @@ svg.score .nt.warn { color: var(--accent-text); }
 .chant .secondary.small { flex: none; padding: 7px 14px; min-height: 38px; font-size: 14px; background: #fff; }
 .chant-score { margin-top: 4px; }
 svg.score .lyric { font: 500 13px var(--sans); fill: var(--ink); text-anchor: middle; }
+.iv-from { margin: 4px 0 14px; }
+.iv-from .seg { display: grid; grid-template-columns: repeat(4, 1fr); }
+.iv-from .seg button { padding: 8px 4px; white-space: nowrap; }
